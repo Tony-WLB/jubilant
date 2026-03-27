@@ -105,6 +105,55 @@ class Juju:
     # Keep the public methods in alphabetical order, so we don't have to think
     # about where to put each new method.
 
+    def add_cloud(
+        self,
+        cloud: str,
+        definition: str | pathlib.Path | Mapping[str, Any],
+        *,
+        client: bool = False,
+        controller: str | None = None,
+        credential: str | None = None,
+        force: bool = False,
+        target_controller: str | None = None,
+    ) -> None:
+        """Add a cloud definition to Juju.
+
+        Args:
+            cloud: Name for the cloud.
+            definition: Path to a YAML file containing the cloud definition, or a mapping
+                containing the parsed cloud definition YAML.
+            client: If true, save the cloud to the client for use in future controllers.
+            controller: If specified, save the cloud to the named controller.
+            credential: Credential to use for the new cloud.
+            force: If true, force add cloud to the controller, bypassing checks.
+            target_controller: Name of a JAAS managed controller to add the cloud to.
+        """
+        if not client and controller is None:
+            raise TypeError('"client" must be true or "controller" must be specified (or both)')
+
+        args = ['add-cloud', cloud]
+
+        if client:
+            args.append('--client')
+        if controller is not None:
+            args.extend(['--controller', controller])
+        if credential is not None:
+            args.extend(['--credential', credential])
+        if force:
+            args.append('--force')
+        if target_controller is not None:
+            args.extend(['--target-controller', target_controller])
+
+        if isinstance(definition, (str, pathlib.Path)):
+            args.extend(['--file', str(definition)])
+            self.cli(*args, include_model=False)
+        else:
+            with tempfile.NamedTemporaryFile('w+', dir=self._temp_dir) as temp_file:
+                _yaml.safe_dump(definition, temp_file)
+                temp_file.flush()
+                args.extend(['--file', temp_file.name])
+                self.cli(*args, include_model=False)
+
     @overload
     def add_credential(
         self,
@@ -1348,6 +1397,43 @@ class Juju:
             args.extend(['--scope', scope])
 
         self.cli(*args)
+
+    def update_cloud(
+        self,
+        cloud: str,
+        definition: str | pathlib.Path | Mapping[str, Any],
+        *,
+        client: bool = False,
+        controller: str | None = None,
+    ) -> None:
+        """Update cloud information on this client and/or on a controller.
+
+        Args:
+            cloud: Name of the cloud to update.
+            definition: Path to a YAML file containing the cloud definition, or a mapping
+                containing the parsed cloud definition YAML.
+            client: If true, update the cloud definition on this client.
+            controller: If specified, update the cloud definition on the named controller.
+        """
+        if not client and controller is None:
+            raise TypeError('"client" must be true or "controller" must be specified (or both)')
+
+        args = ['update-cloud', cloud]
+
+        if client:
+            args.append('--client')
+        if controller is not None:
+            args.extend(['--controller', controller])
+
+        if isinstance(definition, (str, pathlib.Path)):
+            args.extend(['-f', str(definition)])
+            self.cli(*args, include_model=False)
+        else:
+            with tempfile.NamedTemporaryFile('w+', dir=self._temp_dir) as temp_file:
+                _yaml.safe_dump(definition, temp_file)
+                temp_file.flush()
+                args.extend(['-f', temp_file.name])
+                self.cli(*args, include_model=False)
 
     def update_secret(
         self,
